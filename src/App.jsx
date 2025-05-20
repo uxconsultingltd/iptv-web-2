@@ -1,0 +1,1 @@
+export default function App() { return <h1>IPTV Web Player – proxy setup ready</h1>; }
