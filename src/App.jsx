@@ -1,4 +1,4 @@
-// IPTV Web Player – Full UI with Tabs (Live TV / Movies / Series), EPG, and Video Player
+// IPTV Web Player with Header, Search, Full EPG and Playable Listings
 
 import { useState, useEffect, useRef } from 'react';
 import Hls from 'hls.js';
@@ -15,6 +15,7 @@ export default function App() {
   const [selectedGroup, setSelectedGroup] = useState('All');
   const [epg, setEpg] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
   const videoRef = useRef(null);
 
   const buildApiUrl = (action) =>
@@ -64,33 +65,46 @@ export default function App() {
     }
   }, [selectedItem, tab]);
 
-  const getCurrentEpg = (channel) => {
-    const now = new Date();
-    return epg.find((p) => {
-      const start = new Date(p.start.slice(0, 12).replace(/(\d{4})(\d{2})(\d{2})(\d{2})/, '$1-$2-$3T$4:00'));
-      const stop = new Date(p.stop.slice(0, 12).replace(/(\d{4})(\d{2})(\d{2})(\d{2})/, '$1-$2-$3T$4:00'));
-      return p.channel === channel.epg_channel_id && now >= start && now <= stop;
-    });
+  const now = new Date();
+
+  const getChannelEpg = (channel) => {
+    return epg
+      .filter((p) => p.channel === channel.epg_channel_id)
+      .map((p) => {
+        const start = new Date(p.start.slice(0, 14).replace(/(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})/, '$1-$2-$3T$4:$5'));
+        const stop = new Date(p.stop.slice(0, 14).replace(/(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})/, '$1-$2-$3T$4:$5'));
+        return { ...p, start, stop };
+      })
+      .filter((p) => p.start > new Date(now.getTime() - 2 * 60 * 60 * 1000)) // only recent
+      .sort((a, b) => a.start - b.start);
   };
 
-  const filteredChannels = channels.filter((ch) =>
-    selectedGroup === 'All' || ch.category_name === selectedGroup
+  const filteredItems = (items) =>
+    items.filter((item) =>
+      (selectedGroup === 'All' || item.category_name === selectedGroup) &&
+      item.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+  const renderEpgList = (channel) => (
+    <ul className="text-sm text-gray-600 mt-1 space-y-0.5">
+      {getChannelEpg(channel).map((e, idx) => (
+        <li key={idx} className="border-b pb-0.5">
+          {e.start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} – {e.title}
+        </li>
+      ))}
+    </ul>
   );
 
   const renderList = (items) => (
-    <ul className="space-y-1">
-      {items.map((item) => (
+    <ul className="space-y-2">
+      {filteredItems(items).map((item) => (
         <li
           key={item.stream_id}
           onClick={() => setSelectedItem(item)}
           className="p-2 border rounded hover:bg-blue-100 cursor-pointer"
         >
           <strong>{item.name}</strong>
-          {tab === 'live' && (
-            <div className="text-sm text-gray-600">
-              {getCurrentEpg(item)?.title || 'No EPG'}
-            </div>
-          )}
+          {tab === 'live' && renderEpgList(item)}
         </li>
       ))}
     </ul>
@@ -98,7 +112,10 @@ export default function App() {
 
   return (
     <div className="max-w-screen-md mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">IPTV Web Player</h1>
+      <header className="mb-6 border-b pb-3">
+        <h1 className="text-2xl font-bold mb-1">📺 IPTV Web Player</h1>
+        <p className="text-sm text-gray-600">Login to access live TV, movies and series</p>
+      </header>
 
       <div className="grid gap-2 mb-4">
         <input className="border p-2" placeholder="Server URL" value={serverUrl} onChange={(e) => setServerUrl(e.target.value)} />
@@ -108,7 +125,7 @@ export default function App() {
       </div>
 
       {selectedItem && (
-        <div className="mb-4">
+        <div className="mb-6">
           <h2 className="text-lg font-semibold mb-1">Now Playing: {selectedItem.name}</h2>
           <video ref={videoRef} controls autoPlay className="w-full rounded shadow" />
         </div>
@@ -120,12 +137,21 @@ export default function App() {
         <button className={tab === 'series' ? 'font-bold' : ''} onClick={() => setTab('series')}>Series</button>
       </div>
 
+      <div className="mb-4">
+        <input
+          className="border p-2 w-full"
+          placeholder="Search..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
+      </div>
+
       {tab === 'live' && (
         <>
           <select className="border p-2 mb-2" value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value)}>
             {groups.map((g) => <option key={g}>{g}</option>)}
           </select>
-          {renderList(filteredChannels)}
+          {renderList(channels)}
         </>
       )}
       {tab === 'movie' && renderList(movies)}
