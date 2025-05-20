@@ -1,4 +1,4 @@
-// IPTV Web Player with Header, Search, Full EPG and Playable Listings
+// IPTV Web Player with Login Screen, Home Menu, Group Selection, Channel Preview and EPG
 
 import { useState, useEffect, useRef } from 'react';
 import Hls from 'hls.js';
@@ -7,7 +7,8 @@ export default function App() {
   const [serverUrl, setServerUrl] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [tab, setTab] = useState('live');
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [page, setPage] = useState('home'); // 'home', 'live', 'movie', 'series'
   const [channels, setChannels] = useState([]);
   const [movies, setMovies] = useState([]);
   const [series, setSeries] = useState([]);
@@ -45,6 +46,7 @@ export default function App() {
         stop: p.getAttribute('stop'),
       }));
       setEpg(programs);
+      setIsLoggedIn(true);
     } catch (e) {
       alert('Login failed or server error.');
     }
@@ -52,7 +54,7 @@ export default function App() {
 
   useEffect(() => {
     if (selectedItem && videoRef.current) {
-      const streamType = tab === 'live' ? 'live' : tab === 'movie' ? 'movie' : 'series';
+      const streamType = page === 'live' ? 'live' : page === 'movie' ? 'movie' : 'series';
       const streamUrl = `${serverUrl}/${streamType}/${username}/${password}/${selectedItem.stream_id}.m3u8`;
 
       if (Hls.isSupported()) {
@@ -63,7 +65,7 @@ export default function App() {
         videoRef.current.src = streamUrl;
       }
     }
-  }, [selectedItem, tab]);
+  }, [selectedItem, page]);
 
   const now = new Date();
 
@@ -75,7 +77,7 @@ export default function App() {
         const stop = new Date(p.stop.slice(0, 14).replace(/(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})/, '$1-$2-$3T$4:$5'));
         return { ...p, start, stop };
       })
-      .filter((p) => p.start > new Date(now.getTime() - 2 * 60 * 60 * 1000)) // only recent
+      .filter((p) => p.start > new Date(now.getTime() - 2 * 60 * 60 * 1000))
       .sort((a, b) => a.start - b.start);
   };
 
@@ -104,58 +106,71 @@ export default function App() {
           className="p-2 border rounded hover:bg-blue-100 cursor-pointer"
         >
           <strong>{item.name}</strong>
-          {tab === 'live' && renderEpgList(item)}
+          {page === 'live' && renderEpgList(item)}
         </li>
       ))}
     </ul>
   );
 
+  if (!isLoggedIn) {
+    return (
+      <div className="max-w-screen-sm mx-auto p-6">
+        <h1 className="text-2xl font-bold mb-4">🔐 IPTV Login</h1>
+        <div className="space-y-3">
+          <input className="border p-2 w-full" placeholder="Server URL" value={serverUrl} onChange={(e) => setServerUrl(e.target.value)} />
+          <input className="border p-2 w-full" placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} />
+          <input className="border p-2 w-full" type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <button onClick={handleLogin} className="bg-blue-600 text-white px-4 py-2 rounded w-full">Login</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (page === 'home') {
+    return (
+      <div className="max-w-screen-md mx-auto p-4">
+        <h1 className="text-2xl font-bold mb-6">🏠 IPTV Home</h1>
+        <div className="grid gap-4">
+          <button onClick={() => setPage('live')} className="bg-blue-100 border p-4 rounded text-left">📺 Live TV</button>
+          <button onClick={() => setPage('movie')} className="bg-green-100 border p-4 rounded text-left">🎬 Movies</button>
+          <button onClick={() => setPage('series')} className="bg-yellow-100 border p-4 rounded text-left">📚 Series</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-screen-md mx-auto p-4">
-      <header className="mb-6 border-b pb-3">
-        <h1 className="text-2xl font-bold mb-1">📺 IPTV Web Player</h1>
-        <p className="text-sm text-gray-600">Login to access live TV, movies and series</p>
-      </header>
-
-      <div className="grid gap-2 mb-4">
-        <input className="border p-2" placeholder="Server URL" value={serverUrl} onChange={(e) => setServerUrl(e.target.value)} />
-        <input className="border p-2" placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} />
-        <input className="border p-2" type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
-        <button onClick={handleLogin} className="bg-blue-600 text-white px-4 py-2 rounded">Login & Load</button>
+      <div className="mb-4 flex justify-between items-center">
+        <h1 className="text-xl font-bold">{page === 'live' ? '📺 Live TV' : page === 'movie' ? '🎬 Movies' : '📚 Series'}</h1>
+        <button className="text-sm underline" onClick={() => setPage('home')}>⬅ Back to Home</button>
       </div>
 
-      {selectedItem && (
-        <div className="mb-6">
-          <h2 className="text-lg font-semibold mb-1">Now Playing: {selectedItem.name}</h2>
-          <video ref={videoRef} controls autoPlay className="w-full rounded shadow" />
-        </div>
-      )}
+      <input
+        className="border p-2 w-full mb-4"
+        placeholder="Search..."
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+      />
 
-      <div className="mb-4 flex gap-2">
-        <button className={tab === 'live' ? 'font-bold' : ''} onClick={() => setTab('live')}>Live TV</button>
-        <button className={tab === 'movie' ? 'font-bold' : ''} onClick={() => setTab('movie')}>Movies</button>
-        <button className={tab === 'series' ? 'font-bold' : ''} onClick={() => setTab('series')}>Series</button>
-      </div>
-
-      <div className="mb-4">
-        <input
-          className="border p-2 w-full"
-          placeholder="Search..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-      </div>
-
-      {tab === 'live' && (
+      {page === 'live' && (
         <>
-          <select className="border p-2 mb-2" value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value)}>
+          <select className="border p-2 mb-4" value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value)}>
             {groups.map((g) => <option key={g}>{g}</option>)}
           </select>
           {renderList(channels)}
         </>
       )}
-      {tab === 'movie' && renderList(movies)}
-      {tab === 'series' && renderList(series)}
+
+      {page === 'movie' && renderList(movies)}
+      {page === 'series' && renderList(series)}
+
+      {selectedItem && (
+        <div className="mt-6">
+          <h2 className="text-lg font-semibold mb-2">Now Playing: {selectedItem.name}</h2>
+          <video ref={videoRef} controls autoPlay className="w-full rounded shadow" />
+        </div>
+      )}
     </div>
   );
 }
