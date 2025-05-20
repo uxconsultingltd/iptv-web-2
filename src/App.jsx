@@ -1,14 +1,15 @@
-// IPTV Web Player with Login Screen, Home Menu, Group Selection, Channel Preview and EPG
+// IPTV Web Player – Final Login Flow with Error Handling, Placeholder Credentials, UX Enhancements
 
 import { useState, useEffect, useRef } from 'react';
 import Hls from 'hls.js';
 
 export default function App() {
-  const [serverUrl, setServerUrl] = useState('');
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [serverUrl, setServerUrl] = useState('http://line.ottcdn.net:80');
+  const [username, setUsername] = useState('cbfa4abc2f');
+  const [password, setPassword] = useState('2da068dcfb39');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [page, setPage] = useState('home'); // 'home', 'live', 'movie', 'series'
+  const [loginError, setLoginError] = useState('');
+  const [page, setPage] = useState('home');
   const [channels, setChannels] = useState([]);
   const [movies, setMovies] = useState([]);
   const [series, setSeries] = useState([]);
@@ -23,17 +24,20 @@ export default function App() {
     `/api/player_api?username=${username}&password=${password}&action=${action}`;
 
   const handleLogin = async () => {
+    setLoginError('');
     try {
       const res = await fetch(buildApiUrl('player_api'));
       const data = await res.json();
-      const live = data.live_streams || [];
-      const vod = data.movie_streams || [];
-      const ser = data.series || [];
 
-      setChannels(live);
-      setMovies(vod);
-      setSeries(ser);
-      setGroups(['All', ...new Set(live.map((ch) => ch.category_name))]);
+      if (!data.user_info || data.user_info.status !== 'Active') {
+        setLoginError('Invalid login credentials or inactive account.');
+        return;
+      }
+
+      setChannels(data.live_streams || []);
+      setMovies(data.movie_streams || []);
+      setSeries(data.series || []);
+      setGroups(['All', ...new Set(data.live_streams.map((ch) => ch.category_name))]);
 
       const epgRes = await fetch(buildApiUrl('xmltv'));
       const epgText = await epgRes.text();
@@ -45,10 +49,12 @@ export default function App() {
         start: p.getAttribute('start'),
         stop: p.getAttribute('stop'),
       }));
+
       setEpg(programs);
       setIsLoggedIn(true);
+      setPage('home');
     } catch (e) {
-      alert('Login failed or server error.');
+      setLoginError('Failed to connect to server. Please check the address.');
     }
   };
 
@@ -121,6 +127,7 @@ export default function App() {
           <input className="border p-2 w-full" placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} />
           <input className="border p-2 w-full" type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
           <button onClick={handleLogin} className="bg-blue-600 text-white px-4 py-2 rounded w-full">Login</button>
+          {loginError && <div className="text-red-600 text-sm mt-2">{loginError}</div>}
         </div>
       </div>
     );
